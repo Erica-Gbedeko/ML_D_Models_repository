@@ -33,8 +33,8 @@ st.markdown(
         border-radius: 16px;
         margin-bottom: 1.2rem;
     }
-    .hero h1 { color: #FFFFFF; margin: 0; font-size: 2rem; }
-    .hero p  { color: #E0F2FE; margin: 0.3rem 0 0 0; font-size: 1.05rem; }
+    .hero h1 { color: #4F46E5; margin: 0; font-size: 2rem; }
+    .hero p  { color: #4F46E5; margin: 0.3rem 0 0 0; font-size: 1.05rem; }
  
     /* Carte de résultat */
     .result-card {
