@@ -78,7 +78,7 @@ def _split_adresse(df):
 PAGES = {
     # ------------------------------------------------------------------ #
     "Car data": {
-        "icon": "🚗",
+        "icon": "",
         "title": "Car data : voitures d'occasion ou venant (Dakar)",
         "description": ("Ce modèle (Random Forest) prédit si une voiture est "
                         "**d'occasion** ou **venant** à partir de sa marque, de son année, "
@@ -104,7 +104,7 @@ PAGES = {
     },
     # ------------------------------------------------------------------ #
     "Car dataset": {
-        "icon": "🚙",
+        "icon": "",
         "title": "Car dataset : prix de vente d'une voiture",
         "description": ("Ce modèle (Random Forest) prédit le **prix de vente** d'une voiture "
                         "à partir de son kilométrage, de son prix actuel, de son carburant, "
@@ -131,7 +131,7 @@ PAGES = {
     },
     # ------------------------------------------------------------------ #
     "Telephone": {
-        "icon": "📱",
+        "icon": "",
         "title": "Telephone : état d'un téléphone",
         "description": ("Ce modèle (Random Forest) prédit l'**état** d'un téléphone "
                         "(neuf, d'occasion, reconditionné, venant) à partir de son prix, "
@@ -160,7 +160,7 @@ PAGES = {
     },
     # ------------------------------------------------------------------ #
     "Taxi trips": {
-        "icon": "🚕",
+        "icon": "",
         "title": "Taxi trips : prix d'une course",
         "description": ("Ce modèle (Random Forest) prédit le **prix d'une course de taxi** à "
                         "partir de la distance, du moment de la journée, du jour, du nombre "
