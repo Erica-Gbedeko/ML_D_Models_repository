@@ -16,7 +16,7 @@ import streamlit as st        # création de l'interface web
 APP_NAME = "Erica's ML App"
  
 st.set_page_config(
-    page_title=f"{APP_NAME} | Applications ML",
+    page_title=f"{APP_NAME}",
     page_icon="🤖",
     layout="wide",
 )
