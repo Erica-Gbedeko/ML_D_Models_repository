@@ -123,6 +123,7 @@ PAGES = {
         "target": "Trip_Price",
         "target_label": "Prix de la course",
         "unit": "$",
+        "drop_missing": True,                    # ✏️ MODIFIÉ : ignorer les lignes avec valeurs manquantes
         "features": [
             {"name": "Trip_Distance_km", "label": "Distance (km)", "kind": "num",
              "min": 0.0, "default": 25.0, "step": 0.5},
@@ -357,29 +358,44 @@ def multiple_tab(key, cfg, art):
     st.dataframe(df.head())
  
     res_key = f"{key}_result"
-    fill = st.checkbox(
-        "Remplir automatiquement les valeurs manquantes "
-        "(médiane pour les nombres, valeur la plus fréquente pour le texte)",
-        value=True, key=f"{key}_fill",
-    )
+    drop = cfg.get("drop_missing", False)        # ✏️ MODIFIÉ
+    if drop:                                     # ✏️ MODIFIÉ : pas de case à cocher pour Taxi
+        fill = False
+        st.info("Les lignes contenant une valeur manquante seront ignorées.")
+    else:
+        fill = st.checkbox(
+            "Remplir automatiquement les valeurs manquantes "
+            "(médiane pour les nombres, valeur la plus fréquente pour le texte)",
+            value=True, key=f"{key}_fill",
+        )
     if st.button("Prédire", key=f"{key}_btn"):
         data = cfg["prep"](df.copy()) if cfg.get("prep") else df.copy()
         n_filled = 0
-        if fill:
+        n_dropped = 0                            # ✏️ MODIFIÉ
+        if drop:                                 # ✏️ MODIFIÉ : on supprime les lignes incomplètes
+            n_avant = len(data)
+            data = data.dropna(subset=names)
+            n_dropped = n_avant - len(data)
+        elif fill:
             data, n_filled = fill_missing(cfg, data)
         error = validate_df(cfg, art, data)
+        if data.empty:                           # ✏️ MODIFIÉ : plus aucune ligne valide
+            error = "Aucune ligne complète à prédire."
         if error:
             st.session_state.pop(res_key, None)
             st.error(error)
         else:
             preds, proba = predict_df(cfg, art, data)
-            out = df.copy()
+            out = df.loc[data.index].copy()      # ✏️ MODIFIÉ : on garde seulement les lignes prédites
             out[f"{cfg['target']}_predit"] = preds
             if proba is not None:
                 out["Confiance"] = proba.max(axis=1).round(3).to_numpy()
-            note = (f"{n_filled} valeur(s) manquante(s) remplie(s) automatiquement : "
-                    "les prédictions de ces lignes sont approximatives."
-                    if n_filled else "")
+            note = ""
+            if n_filled:
+                note = (f"{n_filled} valeur(s) manquante(s) remplie(s) automatiquement : "
+                        "les prédictions de ces lignes sont approximatives.")
+            if n_dropped:                        # ✏️ MODIFIÉ
+                note = f"{n_dropped} ligne(s) ignorée(s) (valeurs manquantes)."
             st.session_state[res_key] = (file.name, out, note)
  
     saved = st.session_state.get(res_key)
@@ -464,3 +480,4 @@ st.divider()
 # ------------------------- Contenu : onglets simple / multiple -------------------------
 active = st.session_state.page
 render_page(active.lower().replace(" ", "_"), PAGES[active])
+ 
