@@ -1,24 +1,72 @@
-"""Applications ML (Car data, Car dataset, Telephone, Taxi trips) — un seul fichier.
- 
-Lancer : streamlit run app.py
-Modèles attendus dans models/<dossier>/ (voir PAGES plus bas).
-"""
+# ÉTAPE 1 : IMPORTER LES BIBLIOTHÈQUES
+# =============================================================================
 import re
 from pathlib import Path
  
-import joblib
-import numpy as np
-import pandas as pd
-import streamlit as st
+import joblib                 # charger les modèles sauvegardés (.joblib)
+import numpy as np            # calcul numérique
+import pandas as pd           # manipulation des tableaux de données
+import streamlit as st        # création de l'interface web
+ 
  
 # =============================================================================
-# 1) CONFIGURATION DES 4 APPLICATIONS
-# L'ordre de `features` = ordre des colonnes de x dans le notebook.
-# `enc` = position de la colonne dans `encoders` / `uniques` (ordre des
-# colonnes catégorielles du notebook).
+# ÉTAPE 2 : CONFIGURER LA PAGE ET LE STYLE
+# (st.set_page_config doit être la 1re commande Streamlit du fichier)
+# =============================================================================
+APP_NAME = "Erica's ML App"
+ 
+st.set_page_config(
+    page_title=f"{APP_NAME} | Applications ML",
+    page_icon="🤖",
+    layout="wide",
+)
+ 
+# Style visuel (CSS) : bandeau d'en-tête, cartes de résultat, boutons.
+# Les couleurs sont semi-transparentes : elles s'adaptent au mode clair/sombre.
+st.markdown(
+    """
+    <style>
+    /* Bandeau d'en-tête */
+    .hero {
+        background: linear-gradient(120deg, #4F46E5 0%, #0EA5E9 100%);
+        padding: 1.6rem 2rem;
+        border-radius: 16px;
+        margin-bottom: 1.2rem;
+    }
+    .hero h1 { color: #FFFFFF; margin: 0; font-size: 2rem; }
+    .hero p  { color: #E0F2FE; margin: 0.3rem 0 0 0; font-size: 1.05rem; }
+ 
+    /* Carte de résultat */
+    .result-card {
+        background: rgba(79, 70, 229, 0.10);
+        border-left: 6px solid #4F46E5;
+        border-radius: 12px;
+        padding: 1.1rem 1.4rem;
+        margin: 1rem 0 0.8rem 0;
+    }
+    .result-card .label { font-size: 0.95rem; opacity: 0.75; margin: 0; }
+    .result-card .value { font-size: 2.1rem; font-weight: 700; margin: 0.1rem 0 0 0; }
+ 
+    /* Boutons de la barre latérale sur toute la largeur */
+    [data-testid="stSidebar"] .stButton > button { width: 100%; border-radius: 10px; }
+ 
+    /* Boutons d'action principaux */
+    .stForm button, .stDownloadButton button { border-radius: 10px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+ 
+ 
+# =============================================================================
+# ÉTAPE 3 : DÉCRIRE LES 4 APPLICATIONS (dictionnaire PAGES)
+# Chaque modèle est décrit une seule fois ici ; le reste du code est générique.
+#   - "features" : champs du formulaire, DANS L'ORDRE des colonnes du notebook
+#   - "enc"      : position de la colonne dans encoders.joblib / uniques.joblib
+#   - "scalers"  : scaler(s) à appliquer avant la prédiction
 # =============================================================================
 def _split_adresse(df):
-    """Car Data : le notebook découpe « Quartier,Ville » depuis la colonne Adresse."""
+    """Car data : le notebook sépare « Quartier,Ville » depuis la colonne Adresse."""
     if "Adresse" in df.columns:
         parts = df["Adresse"].astype(str).str.split(",", n=1, expand=True)
         df["Quartier"] = parts[0].str.strip()
@@ -31,7 +79,7 @@ PAGES = {
     # ------------------------------------------------------------------ #
     "Car data": {
         "icon": "🚗",
-        "title": "Car data — Voitures neuves / d'occasion (Dakar)",
+        "title": "Car data : voitures d'occasion ou venant (Dakar)",
         "description": ("Ce modèle (Random Forest) prédit si une voiture est "
                         "**d'occasion** ou **venant** à partir de sa marque, de son année, "
                         "de sa boîte de vitesse, de son prix et de son quartier."),
@@ -57,7 +105,7 @@ PAGES = {
     # ------------------------------------------------------------------ #
     "Car dataset": {
         "icon": "🚙",
-        "title": "Car dataset — Prix de vente d'une voiture",
+        "title": "Car dataset : prix de vente d'une voiture",
         "description": ("Ce modèle (Random Forest) prédit le **prix de vente** d'une voiture "
                         "à partir de son kilométrage, de son prix actuel, de son carburant, "
                         "du type de vendeur, de sa transmission et de son âge."),
@@ -84,7 +132,7 @@ PAGES = {
     # ------------------------------------------------------------------ #
     "Telephone": {
         "icon": "📱",
-        "title": "Telephone — État d'un téléphone",
+        "title": "Telephone : état d'un téléphone",
         "description": ("Ce modèle (Random Forest) prédit l'**état** d'un téléphone "
                         "(neuf, d'occasion, reconditionné, venant) à partir de son prix, "
                         "de son adresse, de sa marque, de la taille d'écran, de la RAM "
@@ -113,7 +161,7 @@ PAGES = {
     # ------------------------------------------------------------------ #
     "Taxi trips": {
         "icon": "🚕",
-        "title": "Taxi trips — Prix d'une course",
+        "title": "Taxi trips : prix d'une course",
         "description": ("Ce modèle (Random Forest) prédit le **prix d'une course de taxi** à "
                         "partir de la distance, du moment de la journée, du jour, du nombre "
                         "de passagers, du trafic, de la météo, des tarifs et de la durée."),
@@ -123,7 +171,6 @@ PAGES = {
         "target": "Trip_Price",
         "target_label": "Prix de la course",
         "unit": "$",
-        "drop_missing": True,                    # ✏️ MODIFIÉ : ignorer les lignes avec valeurs manquantes
         "features": [
             {"name": "Trip_Distance_km", "label": "Distance (km)", "kind": "num",
              "min": 0.0, "default": 25.0, "step": 0.5},
@@ -147,20 +194,22 @@ PAGES = {
  
  
 # =============================================================================
-# 2) MOTEUR : chargement des modèles, prédiction simple et multiple
+# ÉTAPE 4 : CHARGER LES OBJETS SAUVEGARDÉS DANS LES NOTEBOOKS
+# Pour chaque modèle on charge 4 éléments avec joblib :
+#   le modèle, les encodeurs, les valeurs uniques et le(s) scaler(s).
+# @st.cache_resource : le chargement se fait UNE seule fois (pas à chaque clic).
 # =============================================================================
-# Chemins RELATIFS au projet (et non /content/... comme sur Colab).
-# Les dossiers sont cherchés dans models/ puis à la racine du projet, sans tenir
-# compte des majuscules, espaces, « _ » ou « - » (« Taxi trip » = « taxi_trip »).
 APP_DIR = Path(__file__).parent
 MODELS_DIR = APP_DIR / "models"
  
  
 def _norm(name: str) -> str:
+    """Normalise un nom de dossier (sans majuscules, espaces, « _ » ni « - »)."""
     return re.sub(r"[\s_\-]", "", name.lower())
  
  
 def find_model_dir(folder: str) -> Path:
+    """Retrouve le dossier du modèle dans models/ (ou à la racine du projet)."""
     key = _norm(folder)
     for base in (MODELS_DIR, APP_DIR):
         if base.is_dir():
@@ -170,81 +219,70 @@ def find_model_dir(folder: str) -> Path:
     return MODELS_DIR / folder
  
  
-# ----------------------------------------------------------------------------
-# Chargement des objets sauvegardés (une seule fois grâce au cache)
-# ----------------------------------------------------------------------------
 @st.cache_resource
 def load_artifacts(folder: str, scaler_files: tuple):
+    """Charge le modèle, les encodeurs, les valeurs uniques et les scalers."""
     d = find_model_dir(folder)
     return {
         "model": joblib.load(d / "rf_model.joblib"),
         "encoders": joblib.load(d / "encoders.joblib"),
         "uniques": joblib.load(d / "uniques.joblib"),
-        # les scalers sont appliqués dans l'ordre (ex. Robust puis MinMax)
-        "scalers": [joblib.load(d / f) for f in scaler_files],
+        "scalers": [joblib.load(d / f) for f in scaler_files],  # appliqués dans l'ordre
     }
  
  
-# ----------------------------------------------------------------------------
-# Validation + prédiction (vectorisées : pas de boucle ligne par ligne)
-# ----------------------------------------------------------------------------
-def validate_df(cfg, art, df):
-    """Retourne un message d'erreur (str) ou None si tout est correct."""
-    names = [f["name"] for f in cfg["features"]]
-    missing = [n for n in names if n not in df.columns]
-    if missing:
-        return "Colonnes manquantes dans le fichier : " + ", ".join(missing)
-    if df[names].isna().any().any():
-        return "Le fichier contient des valeurs manquantes (ou une colonne entièrement vide) dans les colonnes utilisées. Cochez « Remplir automatiquement » ou complétez le fichier."
-    for f in cfg["features"]:
-        if f["kind"] == "cat":
-            known = set(art["encoders"][f["enc"]].classes_)
-            bad = sorted(set(df[f["name"]].astype(str).str.strip()) - known)
-            if bad:
-                return (f"Valeurs inconnues dans « {f['name']} » : "
-                        + ", ".join(bad[:10]) + (" …" if len(bad) > 10 else ""))
+def check_artifacts(cfg, art):
+    """Vérifie que les fichiers du dossier correspondent bien à cette page."""
+    cats = [f["enc"] for f in cfg["features"] if f["kind"] == "cat"]
+    if cfg["task"] == "classification":
+        cats.append(cfg["target_enc"])
+    need = max(cats) + 1 if cats else 0
+    if len(art["uniques"]) < need or len(art["encoders"]) < need:
+        return ("Ce dossier ne contient pas le bon modèle pour cette page : "
+                "relancez le bon notebook puis réexportez les fichiers .joblib.")
+    for i in set(cats):
+        if art["encoders"][i].classes_.dtype.kind in "iufb":
+            return ("Les encodeurs contiennent des nombres au lieu des noms : "
+                    "relancez tout le notebook dans l'ordre puis réexportez les .joblib.")
+    n = getattr(art["model"], "n_features_in_", None)
+    if n is not None and n != len(cfg["features"]):
+        return f"Le modèle attend {n} variables, mais cette page en utilise {len(cfg['features'])}."
     return None
  
  
-def fill_missing(cfg, df):
-    """Remplit les cases vides : médiane (nombres) / valeur la plus fréquente (texte)."""
-    df = df.copy()
-    n_filled = 0
-    for f in cfg["features"]:
-        col = f["name"]
-        if col not in df.columns or not df[col].isna().any():
-            continue
-        if df[col].isna().all():
-            continue  # colonne entièrement vide : impossible à remplir
-        n_filled += int(df[col].isna().sum())
-        if f["kind"] == "cat":
-            df[col] = df[col].fillna(df[col].mode().iloc[0])
-        else:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-            df[col] = df[col].fillna(df[col].median())
-    return df, n_filled
- 
- 
-def predict_df(cfg, art, df):
-    """Retourne (prédictions, probabilités ou None)."""
+# =============================================================================
+# ÉTAPE 5 : FONCTION DE PRÉDICTION
+# On refait EXACTEMENT les mêmes transformations que dans le notebook :
+#   1) encoder les variables catégorielles   (encoders)
+#   2) normaliser les données                (scaler)
+#   3) prédire                               (model.predict)
+# Cette fonction sert aux deux onglets (simple et multiple).
+# =============================================================================
+def predire(cfg, art, df):
+    """Retourne (prédictions, probabilités). Les probabilités = None en régression."""
     names = [f["name"] for f in cfg["features"]]
     X = df[names].copy()
+ 
+    # 1) Encodage des colonnes catégorielles avec les encodeurs du notebook
     for f in cfg["features"]:
         if f["kind"] == "cat":
             enc = art["encoders"][f["enc"]]
             X[f["name"]] = enc.transform(X[f["name"]].astype(str).str.strip())
     X = X.apply(pd.to_numeric).to_numpy(dtype=float)
  
-    # même normalisation que dans le notebook (sinon les prédictions sont fausses)
+    # 2) Normalisation avec le(s) scaler(s) du notebook
     for scaler in art["scalers"]:
         X = scaler.transform(X)
  
+    # 3) Prédiction avec le modèle Random Forest
     model = art["model"]
     y = model.predict(X)
  
+    # Régression : on renvoie directement le prix (arrondi)
     if cfg["task"] == "regression":
         return np.round(y.astype(float), 2), None
  
+    # Classification : on retrouve le NOM de la classe + les probabilités
     target_enc = art["encoders"][cfg["target_enc"]]
     labels = target_enc.inverse_transform(y.astype(int))
     proba = pd.DataFrame(
@@ -254,230 +292,216 @@ def predict_df(cfg, art, df):
     return labels, proba
  
  
-# ----------------------------------------------------------------------------
-# Widgets
-# ----------------------------------------------------------------------------
-def check_artifacts(cfg, art):
-    """Vérifie que le modèle du dossier correspond bien à cette page."""
-    cats = [f["enc"] for f in cfg["features"] if f["kind"] == "cat"]
-    if cfg["task"] == "classification":
-        cats.append(cfg["target_enc"])
-    need = max(cats) + 1 if cats else 0
-    have = len(art["uniques"])
-    if have < need or len(art["encoders"]) < need:
-        return (f"Ce dossier contient {have} variable(s) catégorielle(s) mais cette page "
-                f"en attend {need}. Ce n'est probablement pas le bon modèle : "
-                "relancez le bon notebook avec le bon fichier CSV, puis réexportez.")
-    for i in set(cats):
-        if art["encoders"][i].classes_.dtype.kind in "iufb":
-            return ("Les encodeurs contiennent des nombres au lieu des noms (marques, quartiers…). "
-                    "Dans le notebook, relancez TOUT dans l'ordre (Exécution → Tout exécuter) : "
-                    "les cellules uniques/encoders ne doivent pas être relancées après l'encodage. "
-                    "Puis réexportez les .joblib.")
-    n = getattr(art["model"], "n_features_in_", None)
-    if n is not None and n != len(cfg["features"]):
-        return (f"Le modèle attend {n} variables mais cette page en utilise "
-                f"{len(cfg['features'])}. Ce n'est pas le bon modèle pour cette page.")
-    return None
+def carte_resultat(titre, valeur):
+    """Affiche un résultat dans une jolie carte."""
+    st.markdown(
+        f'<div class="result-card"><p class="label">{titre}</p>'
+        f'<p class="value">{valeur}</p></div>',
+        unsafe_allow_html=True,
+    )
  
  
-def _widget(key, f, art):
+# =============================================================================
+# ÉTAPE 6 : ONGLET 1 : PRÉDICTION SIMPLE (un formulaire)
+# Les listes déroulantes sont remplies avec les vraies valeurs des encodeurs :
+# l'utilisateur ne peut choisir que des valeurs connues du modèle.
+# =============================================================================
+def creer_champ(key, f, art):
+    """Crée le bon champ du formulaire (liste déroulante ou champ numérique)."""
     wkey = f"{key}_{f['name']}"
-    if f["kind"] == "cat":
-        options = art["encoders"][f["enc"]].classes_.tolist()  # vrais noms (pas des nombres)
+ 
+    if f["kind"] == "cat":                                   # variable catégorielle
+        options = art["encoders"][f["enc"]].classes_.tolist()
         idx = options.index(f["default"]) if f.get("default") in options else 0
         return st.selectbox(f["label"], options, index=idx, key=wkey)
  
-    cast = int if f.get("int") else float
-    kwargs = dict(
-        min_value=cast(f["min"]),
-        value=cast(f["default"]),
-        step=cast(f["step"]),
-        key=wkey,
-    )
+    cast = int if f.get("int") else float                    # variable numérique
+    kwargs = dict(min_value=cast(f["min"]), value=cast(f["default"]),
+                  step=cast(f["step"]), key=wkey)
     if f.get("max") is not None:
         kwargs["max_value"] = cast(f["max"])
     return st.number_input(f["label"], **kwargs)
  
  
-# ----------------------------------------------------------------------------
-# Onglet 1 : prédiction simple
-# ----------------------------------------------------------------------------
-def simple_tab(key, cfg, art):
+def onglet_simple(key, cfg, art):
     st.write(cfg["description"])
     feats = cfg["features"]
-    half = (len(feats) + 1) // 2
+    moitie = (len(feats) + 1) // 2
  
+    # Formulaire sur deux colonnes
     with st.form(f"{key}_form"):
         col1, col2 = st.columns(2)
-        values = {}
+        valeurs = {}
         for i, f in enumerate(feats):
-            with (col1 if i < half else col2):
-                values[f["name"]] = _widget(key, f, art)
-        submit = st.form_submit_button("Prédire")
+            with (col1 if i < moitie else col2):
+                valeurs[f["name"]] = creer_champ(key, f, art)
+        envoyer = st.form_submit_button("🔮 Prédire", use_container_width=True)
  
-    if not submit:
+    if not envoyer:
         return
  
-    row = pd.DataFrame([values])
-    preds, proba = predict_df(cfg, art, row)
+    # Prédiction sur UNE ligne
+    preds, proba = predire(cfg, art, pd.DataFrame([valeurs]))
  
     if cfg["task"] == "regression":
-        st.success(f"{cfg['target_label']} : {preds[0]:,.2f} {cfg.get('unit', '')}".strip())
+        unite = cfg.get("unit", "")
+        carte_resultat(cfg["target_label"], f"{preds[0]:,.2f} {unite}".strip())
     else:
-        st.success(f"{cfg['target_label']} : **{preds[0]}**")
-        st.write("Probabilité par classe :")
-        st.dataframe((proba.T.rename(columns={0: "Probabilité"}) * 100).round(1))
+        carte_resultat(cfg["target_label"], preds[0])
+        st.markdown("**Probabilité par classe**")
+        for classe, p in proba.iloc[0].sort_values(ascending=False).items():
+            st.caption(f"{classe} : {p:.1%}")
+            st.progress(float(p))
  
  
-# ----------------------------------------------------------------------------
-# Onglet 2 : prédiction multiple (CSV)
-# ----------------------------------------------------------------------------
-def multiple_tab(key, cfg, art):
+# =============================================================================
+# ÉTAPE 7 : ONGLET 2 : PRÉDICTION MULTIPLE (fichier CSV)
+# Les lignes qui contiennent une valeur manquante (None / vide) sont
+# simplement ignorées, sans message.
+# =============================================================================
+def prediction_multiple(cfg, art, df):
+    """Prédit toutes les lignes complètes du CSV. Retourne (résultat, erreur)."""
+    names = [f["name"] for f in cfg["features"]]
+    data = cfg["prep"](df.copy()) if cfg.get("prep") else df.copy()
+ 
+    # Vérifier que toutes les colonnes attendues sont présentes
+    absentes = [n for n in names if n not in data.columns]
+    if absentes:
+        return None, "Colonnes manquantes dans le fichier : " + ", ".join(absentes)
+ 
+    # Les valeurs non numériques dans une colonne numérique deviennent « vides »
+    for f in cfg["features"]:
+        if f["kind"] == "num":
+            data[f["name"]] = pd.to_numeric(data[f["name"]], errors="coerce")
+ 
+    # >>> On IGNORE les lignes avec des valeurs manquantes (sans message) <<<
+    data = data.dropna(subset=names)
+    if data.empty:
+        return None, "Aucune ligne exploitable dans ce fichier."
+ 
+    # Vérifier que les catégories sont connues du modèle
+    for f in cfg["features"]:
+        if f["kind"] == "cat":
+            connues = set(art["encoders"][f["enc"]].classes_)
+            inconnues = sorted(set(data[f["name"]].astype(str).str.strip()) - connues)
+            if inconnues:
+                return None, (f"Valeurs inconnues dans « {f['name']} » : "
+                              + ", ".join(inconnues[:10]) + (" …" if len(inconnues) > 10 else ""))
+ 
+    # Prédire, puis ajouter les colonnes de résultat aux lignes conservées
+    preds, proba = predire(cfg, art, data)
+    sortie = df.loc[data.index].copy()
+    sortie[f"{cfg['target']}_predit"] = preds
+    if proba is not None:
+        sortie["Confiance"] = proba.max(axis=1).round(3).to_numpy()
+    return sortie, None
+ 
+ 
+def onglet_multiple(key, cfg, art):
     st.write(cfg["description"])
     names = [f["name"] for f in cfg["features"]]
     st.write("Colonnes attendues dans le CSV : " + ", ".join(f"`{n}`" for n in names))
     if cfg.get("csv_note"):
         st.caption(cfg["csv_note"])
  
+    # Fichier modèle à télécharger (en-têtes seulement)
     st.download_button(
-        "Télécharger un modèle de CSV",
+        "📄 Télécharger un modèle de CSV",
         data=pd.DataFrame(columns=names).to_csv(index=False).encode("utf-8"),
         file_name=f"modele_{key}.csv",
         mime="text/csv",
         key=f"{key}_template",
     )
  
-    file = st.file_uploader("Importer un fichier CSV", type=["csv"], key=f"{key}_file")
-    if file is None:
+    # Importer le fichier (sep=None : détecte « , » ou « ; » automatiquement)
+    fichier = st.file_uploader("Importer un fichier CSV", type=["csv"], key=f"{key}_file")
+    if fichier is None:
         return
  
-    # sep=None : détecte automatiquement « , » ou « ; » (CSV exportés d'Excel FR)
-    df = pd.read_csv(file, sep=None, engine="python")
+    df = pd.read_csv(fichier, sep=None, engine="python")
     st.write("Aperçu des données chargées :")
-    st.dataframe(df.head())
+    st.dataframe(df.head(), use_container_width=True)
  
     res_key = f"{key}_result"
-    drop = cfg.get("drop_missing", False)        # ✏️ MODIFIÉ
-    if drop:                                     # ✏️ MODIFIÉ : pas de case à cocher pour Taxi
-        fill = False
-        st.info("Les lignes contenant une valeur manquante seront ignorées.")
-    else:
-        fill = st.checkbox(
-            "Remplir automatiquement les valeurs manquantes "
-            "(médiane pour les nombres, valeur la plus fréquente pour le texte)",
-            value=True, key=f"{key}_fill",
-        )
-    if st.button("Prédire", key=f"{key}_btn"):
-        data = cfg["prep"](df.copy()) if cfg.get("prep") else df.copy()
-        n_filled = 0
-        n_dropped = 0                            # ✏️ MODIFIÉ
-        if drop:                                 # ✏️ MODIFIÉ : on supprime les lignes incomplètes
-            n_avant = len(data)
-            data = data.dropna(subset=names)
-            n_dropped = n_avant - len(data)
-        elif fill:
-            data, n_filled = fill_missing(cfg, data)
-        error = validate_df(cfg, art, data)
-        if data.empty:                           # ✏️ MODIFIÉ : plus aucune ligne valide
-            error = "Aucune ligne complète à prédire."
-        if error:
+    if st.button("🔮 Prédire", key=f"{key}_btn"):
+        sortie, erreur = prediction_multiple(cfg, art, df)
+        if erreur:
             st.session_state.pop(res_key, None)
-            st.error(error)
+            st.error(erreur)
         else:
-            preds, proba = predict_df(cfg, art, data)
-            out = df.loc[data.index].copy()      # ✏️ MODIFIÉ : on garde seulement les lignes prédites
-            out[f"{cfg['target']}_predit"] = preds
-            if proba is not None:
-                out["Confiance"] = proba.max(axis=1).round(3).to_numpy()
-            note = ""
-            if n_filled:
-                note = (f"{n_filled} valeur(s) manquante(s) remplie(s) automatiquement : "
-                        "les prédictions de ces lignes sont approximatives.")
-            if n_dropped:                        # ✏️ MODIFIÉ
-                note = f"{n_dropped} ligne(s) ignorée(s) (valeurs manquantes)."
-            st.session_state[res_key] = (file.name, out, note)
+            # On garde le résultat en mémoire pour qu'il reste affiché
+            st.session_state[res_key] = (fichier.name, sortie)
  
-    saved = st.session_state.get(res_key)
-    if saved and saved[0] == file.name:
-        if saved[2]:
-            st.warning(saved[2])
+    sauve = st.session_state.get(res_key)
+    if sauve and sauve[0] == fichier.name:
         st.write("Résultats des prédictions :")
-        st.dataframe(saved[1])
+        st.dataframe(sauve[1], use_container_width=True)
         st.download_button(
-            "Télécharger les prédictions (CSV)",
-            data=saved[1].to_csv(index=False).encode("utf-8"),
+            "⬇️ Télécharger les prédictions (CSV)",
+            data=sauve[1].to_csv(index=False).encode("utf-8"),
             file_name=f"predictions_{key}.csv",
             mime="text/csv",
             key=f"{key}_download",
         )
  
  
-# ----------------------------------------------------------------------------
-# Page complète
-# ----------------------------------------------------------------------------
-def render_page(key, cfg):
+# =============================================================================
+# ÉTAPE 8 : INTERFACE : TITRE, BARRE LATÉRALE ET ONGLETS
+# =============================================================================
+def afficher_page(key, cfg):
+    """Affiche une application complète : chargement du modèle + 2 onglets."""
     st.subheader(f"{cfg['icon']} {cfg['title']}")
+ 
+    # Charger le modèle (message clair si un fichier est introuvable)
     try:
         art = load_artifacts(cfg["folder"], tuple(cfg.get("scalers", [])))
     except FileNotFoundError as e:
-        st.error(
-            f"Fichier de modèle introuvable : `{Path(e.filename).name if e.filename else 'rf_model.joblib'}` dans "
-            f"`{find_model_dir(cfg['folder']).name}/`. Exportez-le depuis le notebook puis "
-            "ajoutez-le au dépôt."
-        )
+        nom = Path(e.filename).name if e.filename else "rf_model.joblib"
+        st.error(f"Fichier introuvable : `{nom}` dans `{find_model_dir(cfg['folder']).name}/`. "
+                 "Exportez-le depuis le notebook puis ajoutez-le au dépôt.")
         return
  
-    problem = check_artifacts(cfg, art)
-    if problem:
-        st.error(problem)
+    probleme = check_artifacts(cfg, art)
+    if probleme:
+        st.error(probleme)
         return
  
-    tab1, tab2 = st.tabs(["Prédiction simple", "Prédiction multiple"])
+    # Les deux onglets
+    tab1, tab2 = st.tabs(["🎯 Prédiction simple", "📁 Prédiction multiple"])
     with tab1:
-        simple_tab(key, cfg, art)
+        onglet_simple(key, cfg, art)
     with tab2:
-        multiple_tab(key, cfg, art)
+        onglet_multiple(key, cfg, art)
  
  
-# =============================================================================
-# 3) INTERFACE : titre + barre latérale + onglets
-# =============================================================================
+# --- Page active (mémorisée entre deux clics) ---
+if "page" not in st.session_state:
+    st.session_state.page = next(iter(PAGES))
  
-# ✏️ Mettez ici votre nom / le nom de votre application
-APP_NAME = "Erica's ML App"
+# --- Barre latérale : un bouton par application ---
+with st.sidebar:
+    st.header("Applications")
+    for nom, cfg in PAGES.items():
+        active = st.session_state.page == nom
+        if st.button(f"{cfg['icon']}  {nom}", key=f"nav_{nom}",
+                     type="primary" if active else "secondary"):
+            st.session_state.page = nom
+            st.rerun()
+    st.divider()
+    st.caption("Modèles Random Forest entraînés sous Python (scikit-learn).")
  
-st.set_page_config(page_title=f"{APP_NAME} — Applications ML", page_icon="🤖", layout="wide")
- 
-# Boutons de la barre latérale sur toute la largeur (compatible toutes versions de Streamlit)
+# --- Bandeau d'en-tête ---
 st.markdown(
     """
-    <style>
-    [data-testid="stSidebar"] .stButton > button { width: 100%; }
-    </style>
+    <div class="hero">
+        <h1>Welcome to my prediction app</h1>
+        <p>Quatre modèles de Machine Learning : prédiction simple ou par fichier CSV.</p>
+    </div>
     """,
     unsafe_allow_html=True,
 )
  
-# ------------------------- Page active -------------------------
-if "page" not in st.session_state:
-    st.session_state.page = next(iter(PAGES))
- 
-# ------------------------- Barre latérale (4 boutons) -------------------------
-with st.sidebar:
-    st.header("Applications")
-    for name, cfg in PAGES.items():
-        is_active = st.session_state.page == name
-        if st.button(f"{cfg['icon']}  {name}", key=f"nav_{name}",
-                     type="primary" if is_active else "secondary"):
-            st.session_state.page = name
-            st.rerun()
- 
-# ------------------------- En-tête : « Welcome to ... » -------------------------
-st.title(f"Welcome to my prediction app")
-st.divider()
- 
-# ------------------------- Contenu : onglets simple / multiple -------------------------
-active = st.session_state.page
-render_page(active.lower().replace(" ", "_"), PAGES[active])
+# --- Contenu : l'application choisie ---
+page = st.session_state.page
+afficher_page(page.lower().replace(" ", "_"), PAGES[page])
  
