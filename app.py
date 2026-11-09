@@ -34,12 +34,12 @@ st.markdown(
         margin-bottom: 1.2rem;
     }
     .hero h1 { color: #4F46E5; margin: 0; font-size: 2rem; }
-    .hero p  { color: black; margin: 0.3rem 0 0 0; font-size: 1.05rem; }
+    .hero p  { color: #FFFFF4; margin: 0.3rem 0 0 0; font-size: 1.05rem; }
  
     /* Carte de résultat */
     .result-card {
         background: rgba(79, 70, 229, 0.10);
-        border-left: 6px solid #4F46E5;
+        border-left: 6px solid black;
         border-radius: 12px;
         padding: 1.1rem 1.4rem;
         margin: 1rem 0 0.8rem 0;
