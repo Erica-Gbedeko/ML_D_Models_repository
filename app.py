@@ -467,7 +467,7 @@ def afficher_page(key, cfg):
         return
  
     # Les deux onglets
-    tab1, tab2 = st.tabs(["🎯 Prédiction simple", "📁 Prédiction multiple"])
+    tab1, tab2 = st.tabs(["Prédiction simple", " Prédiction multiple"])
     with tab1:
         onglet_simple(key, cfg, art)
     with tab2:
