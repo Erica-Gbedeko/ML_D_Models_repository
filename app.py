@@ -28,7 +28,7 @@ st.markdown(
     <style>
     /* Bandeau d'en-tête */
     .hero {
-        background: linear-gradient(120deg, #4F46E5 0%, #0EA5E9 100%);
+        background: linear-gradient(120deg, black 0%, #0EA5E9 100%);
         padding: 1.6rem 2rem;
         border-radius: 16px;
         margin-bottom: 1.2rem;
